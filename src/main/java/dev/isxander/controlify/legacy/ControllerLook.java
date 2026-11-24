@@ -1,12 +1,14 @@
 package dev.isxander.controlify.legacy;
 
-/** Converts right-stick input into vanilla camera deltas at the render rate. */
+/** Converts stick and gyroscope input into vanilla camera deltas at the render rate. */
 final class ControllerLook {
 	private static final double RESPONSE = 20.0;
 	private static final double MAX_FRAME_SECONDS = 0.05;
 	private static final double VANILLA_DEGREES_PER_UNIT = 0.15;
+	private static final float GYRO_NOISE_THRESHOLD = 0.02F;
 
 	private long lastFrameNanos;
+	private double frameSeconds;
 	private double smoothedX;
 	private double smoothedY;
 	float turnX;
@@ -16,6 +18,7 @@ final class ControllerLook {
 		double elapsed = lastFrameNanos == 0L ? 0.0 : (now - lastFrameNanos) / 1_000_000_000.0;
 		lastFrameNanos = now;
 		elapsed = Math.min(elapsed, MAX_FRAME_SECONDS);
+		frameSeconds = elapsed;
 
 		double magnitude = Math.hypot(x, y);
 		double strength = Math.max(0.0, (Math.min(magnitude, 1.0) - ControllerManager.DEADZONE)
@@ -40,8 +43,20 @@ final class ControllerLook {
 		turnY = (float) (distanceY * rotationScale * (invertY ? 1.0 : -1.0));
 	}
 
+	void addGyro(float pitchRate, float yawRate, float sensitivity, boolean invertY) {
+		// SDL reports radians per second around the controller's local axes. Vanilla subtracts the vertical delta.
+		double rotationScale = frameSeconds * sensitivity / VANILLA_DEGREES_PER_UNIT;
+		turnX -= (float) (Math.toDegrees(filteredGyroRate(yawRate)) * rotationScale);
+		turnY += (float) (Math.toDegrees(filteredGyroRate(pitchRate)) * rotationScale * (invertY ? -1.0 : 1.0));
+	}
+
+	private static float filteredGyroRate(float rate) {
+		return Float.isFinite(rate) && Math.abs(rate) >= GYRO_NOISE_THRESHOLD ? rate : 0.0F;
+	}
+
 	void reset() {
 		lastFrameNanos = 0L;
+		frameSeconds = 0.0;
 		smoothedX = smoothedY = 0.0;
 		turnX = turnY = 0.0F;
 	}

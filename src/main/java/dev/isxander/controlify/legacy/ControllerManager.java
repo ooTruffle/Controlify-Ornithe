@@ -33,6 +33,7 @@ public final class ControllerManager {
 	private static boolean unavailable;
 	private static long gamepad;
 	private static String gamepadName;
+	private static int gyroSensor = SDLSensor.SDL_SENSOR_INVALID;
 	private static boolean noGamepadLogged;
 	private static int rescanTicks;
 	private static boolean previousConfirm;
@@ -71,6 +72,7 @@ public final class ControllerManager {
 			SDLGamepad.SDL_CloseGamepad(gamepad);
 			gamepad = 0L;
 			gamepadName = null;
+			gyroSensor = SDLSensor.SDL_SENSOR_INVALID;
 			rescanTicks = 0;
 			STATE.clear();
 			ATTACK.update(false, false);
@@ -125,11 +127,15 @@ public final class ControllerManager {
 			return;
 		}
 
-		// Apply right-stick look before the renderer interpolates the camera.
+		// Apply controller look before the renderer interpolates the camera.
 		float x = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTX));
 		float y = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTY));
 		LOOK.update(x, y, System.nanoTime(), minecraft.options.mouseSensitivity,
 				LegacyConfig.cameraSpeedMultiplier(), minecraft.options.invertMouseY);
+		float gyroSensitivity = LegacyConfig.gyroAimMultiplier();
+		if (gyroSensitivity > 0.0F && STATE.gyroAvailable && readGyro()) {
+			LOOK.addGyro(STATE.gyroX, STATE.gyroY, gyroSensitivity, minecraft.options.invertMouseY);
+		}
 		if (LOOK.turnX != 0.0F || LOOK.turnY != 0.0F) {
 			minecraft.player.updateLocalPlayerCamera(LOOK.turnX, LOOK.turnY);
 		}
@@ -249,10 +255,15 @@ public final class ControllerManager {
 	}
 
 	private static void configureSensors() {
-		STATE.gyroAvailable = SDLGamepad.SDL_GamepadHasSensor(gamepad, SDLSensor.SDL_SENSOR_GYRO);
-		if (STATE.gyroAvailable) {
-			SDLGamepad.SDL_SetGamepadSensorEnabled(gamepad, SDLSensor.SDL_SENSOR_GYRO, true);
+		gyroSensor = SDLSensor.SDL_SENSOR_INVALID;
+		for (int sensor : new int[] {SDLSensor.SDL_SENSOR_GYRO, SDLSensor.SDL_SENSOR_GYRO_R, SDLSensor.SDL_SENSOR_GYRO_L}) {
+			if (SDLGamepad.SDL_GamepadHasSensor(gamepad, sensor)
+					&& SDLGamepad.SDL_SetGamepadSensorEnabled(gamepad, sensor, true)) {
+				gyroSensor = sensor;
+				break;
+			}
 		}
+		STATE.gyroAvailable = gyroSensor != SDLSensor.SDL_SENSOR_INVALID;
 		STATE.accelAvailable = SDLGamepad.SDL_GamepadHasSensor(gamepad, SDLSensor.SDL_SENSOR_ACCEL);
 		if (STATE.accelAvailable) {
 			SDLGamepad.SDL_SetGamepadSensorEnabled(gamepad, SDLSensor.SDL_SENSOR_ACCEL, true);
@@ -273,14 +284,7 @@ public final class ControllerManager {
 		STATE.dpadDown = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_DOWN);
 
 		if (STATE.gyroAvailable) {
-			try (MemoryStack stack = MemoryStack.stackPush()) {
-				FloatBuffer values = stack.mallocFloat(3);
-				if (SDLGamepad.SDL_GetGamepadSensorData(gamepad, SDLSensor.SDL_SENSOR_GYRO, values)) {
-					STATE.gyroX = values.get(0);
-					STATE.gyroY = values.get(1);
-					STATE.gyroZ = values.get(2);
-				}
-			}
+			readGyro();
 		}
 		if (STATE.accelAvailable) {
 			try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -292,6 +296,20 @@ public final class ControllerManager {
 				}
 			}
 		}
+	}
+
+	private static boolean readGyro() {
+		try (MemoryStack stack = MemoryStack.stackPush()) {
+			FloatBuffer values = stack.mallocFloat(3);
+			if (SDLGamepad.SDL_GetGamepadSensorData(gamepad, gyroSensor, values)) {
+				STATE.gyroX = values.get(0);
+				STATE.gyroY = values.get(1);
+				STATE.gyroZ = values.get(2);
+				return true;
+			}
+		}
+		STATE.gyroX = STATE.gyroY = STATE.gyroZ = 0.0F;
+		return false;
 	}
 
 	private static boolean isGameplayActive(Minecraft minecraft) {

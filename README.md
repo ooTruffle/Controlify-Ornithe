@@ -31,6 +31,8 @@ The current port initializes SDL 3 gamepad input, selects a connected SDL gamepa
 
 Open **OneConfig → Controlify → Controller → Controller Camera Speed (%)** to set right-stick turn speed from 25% to 300%. The default is 100%.
 
+Turn on **Gyro Aim** in the same section to aim by moving an SDL-compatible controller with a gyroscope. It works alongside the right stick during gameplay. **Gyro Sensitivity (%)** adjusts the motion separately and defaults to 100%.
+
 | Xbox-style input | Action |
 | --- | --- |
 | Left stick / right stick | Move / look |

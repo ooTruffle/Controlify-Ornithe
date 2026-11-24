@@ -21,6 +21,23 @@ public final class LegacyConfig extends Config {
 	private static int cameraSpeedPercent = 100;
 
 	@Switch(
+			title = "Gyro Aim",
+			category = "Controller",
+			description = "Turn the camera by moving a controller that exposes a gyroscope."
+	)
+	private static boolean gyroAim;
+
+	@Slider(
+			title = "Gyro Sensitivity (%)",
+			category = "Controller",
+			description = "Adjust how much the camera turns when you move the controller.",
+			min = MIN_CAMERA_SPEED,
+			max = MAX_CAMERA_SPEED,
+			step = 5
+	)
+	private static int gyroSensitivityPercent = 100;
+
+	@Switch(
 			title = "Show controller guide",
 			category = "Controller",
 			description = "Show controller controls on screen while playing and in menus."
@@ -29,6 +46,10 @@ public final class LegacyConfig extends Config {
 
 	static float cameraSpeedMultiplier() {
 		return Math.clamp(cameraSpeedPercent, MIN_CAMERA_SPEED, MAX_CAMERA_SPEED) / 100.0F;
+	}
+
+	static float gyroAimMultiplier() {
+		return gyroAim ? Math.clamp(gyroSensitivityPercent, MIN_CAMERA_SPEED, MAX_CAMERA_SPEED) / 100.0F : 0.0F;
 	}
 
 	private LegacyConfig() {
