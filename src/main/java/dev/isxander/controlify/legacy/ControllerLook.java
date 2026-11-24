@@ -14,15 +14,14 @@ final class ControllerLook {
 	float turnX;
 	float turnY;
 
-	void update(float x, float y, long now, float mouseSensitivity, float speedMultiplier, boolean invertY) {
+	void update(float x, float y, long now, float mouseSensitivity, float speedMultiplier, float deadzone, boolean invertY) {
 		double elapsed = lastFrameNanos == 0L ? 0.0 : (now - lastFrameNanos) / 1_000_000_000.0;
 		lastFrameNanos = now;
 		elapsed = Math.min(elapsed, MAX_FRAME_SECONDS);
 		frameSeconds = elapsed;
 
 		double magnitude = Math.hypot(x, y);
-		double strength = Math.max(0.0, (Math.min(magnitude, 1.0) - ControllerManager.DEADZONE)
-				/ (1.0 - ControllerManager.DEADZONE));
+		double strength = Math.max(0.0, (Math.min(magnitude, 1.0) - deadzone) / (1.0 - deadzone));
 		double scale = strength == 0.0 ? 0.0 : Math.pow(strength, 1.15) / magnitude;
 		double targetX = x * scale;
 		double targetY = y * scale;

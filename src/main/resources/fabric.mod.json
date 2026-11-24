@@ -6,8 +6,9 @@
 	"description": "Controller support for Minecraft: Java Edition.",
 	"authors": ["isXander", "Controlify contributors"],
 	"contact": {
-		"homepage": "https://github.com/isXander/Controlify",
-		"sources": "https://github.com/isXander/Controlify"
+		"homepage": "https://github.com/ooTruffle/Controlify-Ornithe",
+		"sources": "https://github.com/ooTruffle/Controlify-Ornithe",
+		"issues": "https://github.com/ooTruffle/Controlify-Ornithe/issues"
 	},
 	"license": "LGPL-3.0-or-later",
 	"environment": "client",

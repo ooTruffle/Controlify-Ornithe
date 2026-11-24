@@ -2,6 +2,7 @@ package dev.isxander.controlify.legacy;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.inventory.menu.InventoryMenuScreen;
 import net.minecraft.client.options.KeyBinding;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -17,18 +18,7 @@ import java.nio.IntBuffer;
 
 /** SDL 3 gamepad input for Ornithe's LWJGL 3 runtime (provided by Pylon). */
 public final class ControllerManager {
-	static final float DEADZONE = 0.18F;
-	private static final int[] ACTION_BUTTONS = {
-			SDLGamepad.SDL_GAMEPAD_BUTTON_NORTH,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_WEST,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_UP,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_DOWN,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_RIGHT,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_STICK,
-			SDLGamepad.SDL_GAMEPAD_BUTTON_START
-	};
+	private static final float TRIGGER_THRESHOLD = 0.18F;
 	private static boolean initialized;
 	private static boolean unavailable;
 	private static long gamepad;
@@ -36,10 +26,9 @@ public final class ControllerManager {
 	private static int gyroSensor = SDLSensor.SDL_SENSOR_INVALID;
 	private static boolean noGamepadLogged;
 	private static int rescanTicks;
-	private static boolean previousConfirm;
-	private static boolean previousBack;
 	private static int actionButtonsDown;
 	private static int actionButtonsPressed;
+	private static int consumedActions;
 	private static boolean sampledInGameplay;
 
 	private static final ControllerState STATE = new ControllerState();
@@ -91,15 +80,17 @@ public final class ControllerManager {
 			return;
 		}
 
-		previousConfirm = STATE.jump;
-		previousBack = STATE.sneak;
 		readState();
 		sampledInGameplay = isGameplayActive(minecraft);
-		ATTACK.update(STATE.rightTrigger > DEADZONE, sampledInGameplay);
-		USE.update(STATE.leftTrigger > DEADZONE, sampledInGameplay);
 		int buttons = readActionButtons();
 		actionButtonsPressed = buttons & ~actionButtonsDown;
 		actionButtonsDown = buttons;
+		consumedActions = 0;
+		STATE.jump = isActionHeld(ControllerAction.JUMP);
+		STATE.sneak = isActionHeld(ControllerAction.SNEAK);
+		STATE.sprint = isActionHeld(ControllerAction.SPRINT);
+		ATTACK.update(isActionHeld(ControllerAction.ATTACK), sampledInGameplay);
+		USE.update(isActionHeld(ControllerAction.USE), sampledInGameplay);
 		if (sampledInGameplay) {
 			handleGameplayButtons(minecraft);
 		}
@@ -119,9 +110,10 @@ public final class ControllerManager {
 			return;
 		}
 		if (menu) {
-			float x = menuAxis(SDLGamepad.SDL_GAMEPAD_AXIS_LEFTX,
+			boolean freeDpad = !(minecraft.screen instanceof InventoryMenuScreen);
+			float x = menuAxis(SDLGamepad.SDL_GAMEPAD_AXIS_LEFTX, freeDpad,
 					SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_LEFT, SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
-			float y = menuAxis(SDLGamepad.SDL_GAMEPAD_AXIS_LEFTY,
+			float y = menuAxis(SDLGamepad.SDL_GAMEPAD_AXIS_LEFTY, freeDpad,
 					SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_UP, SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_DOWN);
 			MENU.moveCursor(x, y);
 			return;
@@ -131,7 +123,7 @@ public final class ControllerManager {
 		float x = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTX));
 		float y = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTY));
 		LOOK.update(x, y, System.nanoTime(), minecraft.options.mouseSensitivity,
-				LegacyConfig.cameraSpeedMultiplier(), minecraft.options.invertMouseY);
+				LegacyConfig.cameraSpeedMultiplier(), LegacyConfig.rightStickDeadzone(), minecraft.options.invertMouseY);
 		float gyroSensitivity = LegacyConfig.gyroAimMultiplier();
 		if (gyroSensitivity > 0.0F && STATE.gyroAvailable && readGyro()) {
 			LOOK.addGyro(STATE.gyroX, STATE.gyroY, gyroSensitivity, minecraft.options.invertMouseY);
@@ -141,11 +133,13 @@ public final class ControllerManager {
 		}
 	}
 
-	private static float menuAxis(int axis, int negativeButton, int positiveButton) {
-		boolean negative = SDLGamepad.SDL_GetGamepadButton(gamepad, negativeButton);
-		boolean positive = SDLGamepad.SDL_GetGamepadButton(gamepad, positiveButton);
-		if (negative || positive) return Boolean.compare(positive, negative);
-		return applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, axis)));
+	private static float menuAxis(int axis, boolean freeDpad, int negativeButton, int positiveButton) {
+		if (freeDpad) {
+			boolean negative = SDLGamepad.SDL_GetGamepadButton(gamepad, negativeButton);
+			boolean positive = SDLGamepad.SDL_GetGamepadButton(gamepad, positiveButton);
+			if (negative || positive) return Boolean.compare(positive, negative);
+		}
+		return applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, axis)), LegacyConfig.leftStickDeadzone());
 	}
 
 	public static boolean canNavigateMenu() {
@@ -153,12 +147,21 @@ public final class ControllerManager {
 	}
 
 	public static void handleMenuInput(Screen screen) {
-		boolean leftClick = !sampledInGameplay && STATE.jump && !previousConfirm;
-		boolean rightClick = !sampledInGameplay && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_WEST);
-		boolean scrollUp = !sampledInGameplay && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-		boolean scrollDown = !sampledInGameplay && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-		MENU.handleInput(screen, leftClick, STATE.jump, rightClick,
-				isActionHeld(SDLGamepad.SDL_GAMEPAD_BUTTON_WEST), Boolean.compare(scrollUp, scrollDown));
+		boolean leftClick = !sampledInGameplay && consumeActionPress(ControllerAction.MENU_SELECT);
+		boolean rightClick = !sampledInGameplay && consumeActionPress(ControllerAction.MENU_RIGHT_CLICK);
+		boolean scrollUp = !sampledInGameplay && consumeActionPress(ControllerAction.MENU_SCROLL_UP);
+		boolean scrollDown = !sampledInGameplay && consumeActionPress(ControllerAction.MENU_SCROLL_DOWN);
+		if (!sampledInGameplay && screen instanceof InventoryMenuScreen inventory) {
+			int dx = Boolean.compare(wasPressed(ControllerButton.DPAD_RIGHT), wasPressed(ControllerButton.DPAD_LEFT));
+			int dy = Boolean.compare(wasPressed(ControllerButton.DPAD_DOWN), wasPressed(ControllerButton.DPAD_UP));
+			InventoryNavigation.snap(inventory, MENU, dx, dy);
+			if (consumeActionPress(ControllerAction.QUICK_MOVE) && !MENU.isDragging()
+					&& InventoryNavigation.quickMove(inventory)) {
+				leftClick = rightClick = false;
+			}
+		}
+		MENU.handleInput(screen, leftClick, isActionHeld(ControllerAction.MENU_SELECT), rightClick,
+				isActionHeld(ControllerAction.MENU_RIGHT_CLICK), Boolean.compare(scrollUp, scrollDown));
 	}
 
 	public static void releaseMenuButton() {
@@ -167,23 +170,29 @@ public final class ControllerManager {
 
 	private static int readActionButtons() {
 		int buttons = 0;
-		for (int button : ACTION_BUTTONS) {
-			if (SDLGamepad.SDL_GetGamepadButton(gamepad, button)) {
-				buttons |= 1 << button;
+		for (ControllerButton button : ControllerButton.DIGITAL_BUTTONS) {
+			if (SDLGamepad.SDL_GetGamepadButton(gamepad, Integer.numberOfTrailingZeros(button.mask))) {
+				buttons |= button.mask;
 			}
 		}
+		if (STATE.leftTrigger > TRIGGER_THRESHOLD) buttons |= ControllerButton.LEFT_TRIGGER.mask;
+		if (STATE.rightTrigger > TRIGGER_THRESHOLD) buttons |= ControllerButton.RIGHT_TRIGGER.mask;
 		return buttons;
 	}
 
-	private static boolean consumeActionPress(int button) {
-		int mask = 1 << button;
-		boolean pressed = (actionButtonsPressed & mask) != 0;
-		actionButtonsPressed &= ~mask;
+	private static boolean wasPressed(ControllerButton button) {
+		return (actionButtonsPressed & button.mask) != 0;
+	}
+
+	private static boolean consumeActionPress(ControllerAction action) {
+		int mask = 1 << action.ordinal();
+		boolean pressed = (actionButtonsPressed & action.buttonMask()) != 0 && (consumedActions & mask) == 0;
+		consumedActions |= mask;
 		return pressed;
 	}
 
 	public static boolean consumePausePress() {
-		return consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_START);
+		return consumeActionPress(ControllerAction.PAUSE);
 	}
 
 	private static void handleGameplayButtons(Minecraft minecraft) {
@@ -193,12 +202,12 @@ public final class ControllerManager {
 			return;
 		}
 
-		boolean previousSlot = consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-		boolean nextSlot = consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+		boolean previousSlot = consumeActionPress(ControllerAction.HOTBAR_PREV);
+		boolean nextSlot = consumeActionPress(ControllerAction.HOTBAR_NEXT);
 		int scroll = Boolean.compare(previousSlot, nextSlot);
 		if (minecraft.player.isSpectator()) {
 			var spectatorGui = minecraft.gui.getSpectatorGui();
-			if (consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_STICK)) {
+			if (consumeActionPress(ControllerAction.PICK_BLOCK)) {
 				spectatorGui.mouseMiddleClicked();
 			}
 			if (scroll != 0 && spectatorGui.isMenuActive()) spectatorGui.mouseScrolled(-scroll);
@@ -206,7 +215,7 @@ public final class ControllerManager {
 			minecraft.player.inventory.scrollInHotbar(scroll);
 		}
 
-		if (consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_DOWN)) {
+		if (consumeActionPress(ControllerAction.PERSPECTIVE)) {
 			// Apply the same shader and world-renderer updates as Minecraft's perspective key.
 			int perspective = (minecraft.options.perspective + 1) % 3;
 			minecraft.options.perspective = perspective;
@@ -236,8 +245,8 @@ public final class ControllerManager {
 					configureSensors();
 					readState();
 					actionButtonsDown = readActionButtons();
-					ATTACK.update(STATE.rightTrigger > DEADZONE, false);
-					USE.update(STATE.leftTrigger > DEADZONE, false);
+					ATTACK.update(isActionHeld(ControllerAction.ATTACK), false);
+					USE.update(isActionHeld(ControllerAction.USE), false);
 					ControlifyLegacy.LOGGER.info("Connected controller: {}", gamepadName);
 					return;
 				}
@@ -273,13 +282,11 @@ public final class ControllerManager {
 	private static void readState() {
 		STATE.leftX = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_LEFTX));
 		STATE.leftY = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_LEFTY));
-		STATE.rightX = applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTX)));
-		STATE.rightY = applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTY)));
+		float rightDeadzone = LegacyConfig.rightStickDeadzone();
+		STATE.rightX = applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTX)), rightDeadzone);
+		STATE.rightY = applyDeadzone(normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHTY)), rightDeadzone);
 		STATE.leftTrigger = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
 		STATE.rightTrigger = normalize(SDLGamepad.SDL_GetGamepadAxis(gamepad, SDLGamepad.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
-		STATE.jump = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_SOUTH);
-		STATE.sneak = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_EAST);
-		STATE.sprint = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_LEFT_STICK);
 		STATE.dpadUp = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_UP);
 		STATE.dpadDown = SDLGamepad.SDL_GetGamepadButton(gamepad, SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_DOWN);
 
@@ -324,7 +331,7 @@ public final class ControllerManager {
 		return (binding == options.jumpKey && STATE.jump)
 				|| (binding == options.sneakKey && STATE.sneak)
 				|| (binding == options.sprintKey && STATE.sprint)
-				|| (binding == options.playerListKey && isActionHeld(SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
+				|| (binding == options.playerListKey && isActionHeld(ControllerAction.PLAYER_LIST))
 				|| (binding == options.attackKey && ATTACK.held)
 				|| (binding == options.useKey && USE.held);
 	}
@@ -335,24 +342,24 @@ public final class ControllerManager {
 		var options = minecraft.options;
 		return (binding == options.attackKey && ATTACK.consumeClick())
 				|| (binding == options.useKey && USE.consumeClick())
-				|| (binding == options.inventoryKey && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_NORTH))
-				|| (binding == options.dropKey && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_WEST))
-				|| (binding == options.chatKey && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_DPAD_UP))
-				|| (binding == options.pickItemKey && consumeActionPress(SDLGamepad.SDL_GAMEPAD_BUTTON_RIGHT_STICK));
+				|| (binding == options.inventoryKey && consumeActionPress(ControllerAction.INVENTORY))
+				|| (binding == options.dropKey && consumeActionPress(ControllerAction.DROP))
+				|| (binding == options.chatKey && consumeActionPress(ControllerAction.CHAT))
+				|| (binding == options.pickItemKey && consumeActionPress(ControllerAction.PICK_BLOCK));
 	}
 
-	private static boolean isActionHeld(int button) {
-		return (actionButtonsDown & (1 << button)) != 0;
+	private static boolean isActionHeld(ControllerAction action) {
+		return (actionButtonsDown & action.buttonMask()) != 0;
 	}
 
 	private static float normalize(short value) {
 		return value < 0 ? value / 32768.0F : value / 32767.0F;
 	}
 
-	private static float applyDeadzone(float value) {
+	private static float applyDeadzone(float value, float deadzone) {
 		float magnitude = Math.abs(value);
-		if (magnitude <= DEADZONE) return 0.0F;
-		float scaled = (magnitude - DEADZONE) / (1.0F - DEADZONE);
+		if (magnitude <= deadzone) return 0.0F;
+		float scaled = (magnitude - deadzone) / (1.0F - deadzone);
 		return Math.copySign((float) Math.pow(scaled, 1.15), value);
 	}
 
@@ -369,13 +376,14 @@ public final class ControllerManager {
 	}
 
 	public static boolean backPressed() {
-		return STATE.sneak && !previousBack;
+		return !sampledInGameplay && consumeActionPress(ControllerAction.MENU_BACK);
 	}
 
 	public static void combineAnalogMovement(net.minecraft.client.entity.living.player.Input input) {
 		if (!isGameplayActive(Minecraft.getInstance())) return;
-		float sideways = applyDeadzone(STATE.leftX);
-		float forward = applyDeadzone(STATE.leftY);
+		float deadzone = LegacyConfig.leftStickDeadzone();
+		float sideways = applyDeadzone(STATE.leftX, deadzone);
+		float forward = applyDeadzone(STATE.leftY, deadzone);
 		if (sideways == 0.0F && forward == 0.0F) return;
 
 		float maxSpeed = input.sneaking ? 0.3F : 1.0F;
@@ -394,6 +402,12 @@ public final class ControllerManager {
 	public static boolean rumble(float lowFrequency, float highFrequency, int durationMillis) {
 		return gamepad != 0L && SDLGamepad.SDL_RumbleGamepad(
 				gamepad, toUnsignedShort(lowFrequency), toUnsignedShort(highFrequency), Math.max(0, durationMillis));
+	}
+
+	public static void rumbleOnDamage(float damage) {
+		if (damage <= 0 || !LegacyConfig.vibration || !isConnected() || !Display.isActive()) return;
+		float strength = Math.clamp(damage / 8.0F, 0.25F, 1.0F);
+		rumble(strength, strength * 0.6F, 180);
 	}
 
 	public static boolean rumbleTriggers(float left, float right, int durationMillis) {

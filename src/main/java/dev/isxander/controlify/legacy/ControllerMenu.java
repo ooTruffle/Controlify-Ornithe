@@ -44,10 +44,29 @@ final class ControllerMenu {
 		cursorY = Math.clamp(cursorY - vertical * speed * elapsed, 0.0, height - 1.0);
 		int nextX = (int) Math.round(cursorX);
 		int nextY = (int) Math.round(cursorY);
+		warpCursor(nextX, nextY, x, y);
+	}
+
+	void positionCursor(int x, int y) {
+		int width = Display.getWidth();
+		int height = Display.getHeight();
+		if (width <= 0 || height <= 0) return;
+		int nextX = Math.clamp(x, 0, width - 1);
+		int nextY = Math.clamp(y, 0, height - 1);
+		cursorX = nextX;
+		cursorY = nextY;
+		warpCursor(nextX, nextY, Mouse.getX(), Mouse.getY());
+	}
+
+	private void warpCursor(int nextX, int nextY, int x, int y) {
 		if (nextX != x || nextY != y) {
 			Mouse.setCursorPosition(nextX, nextY);
 			if (pressedButton != 0) postDragMotion(pressedButton, nextX - x, y - nextY);
 		}
+	}
+
+	boolean isDragging() {
+		return pressedButton != 0;
 	}
 
 	void resetMotion() {

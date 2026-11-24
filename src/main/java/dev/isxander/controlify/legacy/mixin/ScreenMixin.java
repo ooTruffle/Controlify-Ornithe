@@ -46,12 +46,13 @@ public abstract class ScreenMixin extends GuiElement {
 				hud.getShowInScreens() && !hud.getHidden() && textRenderer != null) {
 			int x = Math.round(hud.getX());
 			int y = Math.round(hud.getY());
-			String pointerGuide = ControllerGuideHud.MENU_POINTER_GUIDE;
-			String buttonsGuide = ControllerGuideHud.MENU_BUTTONS_GUIDE;
-			int width = Math.max(textRenderer.getWidth(pointerGuide), textRenderer.getWidth(buttonsGuide));
-			GuiElement.fill(x, y, x + width + 8, y + 28, 0xA9000000);
-			drawString(textRenderer, pointerGuide, x + 4, y + 4, 0xFFFFFF);
-			drawString(textRenderer, buttonsGuide, x + 4, y + 15, 0xFFFFFF);
+			String[] lines = ControllerGuideHud.menuGuide((Screen) (Object) this);
+			int width = 0;
+			for (String line : lines) width = Math.max(width, textRenderer.getWidth(line));
+			GuiElement.fill(x, y, x + width + 8, y + 6 + 11 * lines.length, 0xA9000000);
+			for (int i = 0; i < lines.length; i++) {
+				drawString(textRenderer, lines[i], x + 4, y + 4 + 11 * i, 0xFFFFFF);
+			}
 		}
 	}
 }
