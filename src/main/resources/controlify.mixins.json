@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.isxander.controlify.legacy.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [],
+	"client": ["MinecraftMixin", "InputMixin", "KeyBindingMixin", "ScreenMixin"],
+	"server": [],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

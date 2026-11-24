@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "controlify",
+	"version": "${version}",
+	"name": "Controlify",
+	"description": "Controller support for Minecraft: Java Edition.",
+	"authors": ["isXander", "Controlify contributors"],
+	"contact": {
+		"homepage": "https://github.com/isXander/Controlify",
+		"sources": "https://github.com/isXander/Controlify"
+	},
+	"license": "LGPL-3.0-or-later",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.isxander.controlify.legacy.ControlifyLegacyClient"]
+	},
+	"mixins": ["controlify.mixins.json"],
+	"depends": {
+		"java": ">=21",
+		"fabricloader": ">=0.17.3",
+		"minecraft": "1.8.9",
+		"pylon": ">=0.2.9",
+		"oneconfigv1": ">=1.9.0",
+		"fabric-language-kotlin": ">=1.14.1",
+		"polycompose": ">=3.0.5"
+	}
+}
