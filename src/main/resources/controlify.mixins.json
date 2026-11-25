@@ -4,7 +4,7 @@
 	"package": "dev.isxander.controlify.legacy.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [],
-	"client": ["MinecraftMixin", "InputMixin", "KeyBindingMixin", "ScreenMixin", "InventoryMenuScreenAccess", "LocalPlayerDamageMixin"],
+	"client": ["MinecraftMixin", "InputMixin", "KeyBindingMixin", "MouseMixin", "ScreenMixin", "InventoryMenuScreenAccess", "LocalPlayerDamageMixin", "ClientPlayNetworkHandlerMixin"],
 	"server": [],
 	"injectors": {
 		"defaultRequire": 1

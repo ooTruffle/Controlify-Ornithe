@@ -17,7 +17,8 @@ public final class ControllerGuideHud extends TextHud {
 		if (!LegacyConfig.showControllerGuide) return null;
 		Minecraft minecraft = Minecraft.getInstance();
 		boolean editing = HudManager.INSTANCE.isEditing();
-		if (!ControllerManager.isConnected() && !editing) return null;
+		if (!ControllerManager.isControllerInput() && !editing) return null;
+		if (minecraft.screen instanceof RadialMenuScreen && !editing) return null;
 		if (minecraft.screen != null) {
 			return String.join("\n", menuGuide(minecraft.screen));
 		}
@@ -26,15 +27,18 @@ public final class ControllerGuideHud extends TextHud {
 
 	public static String[] menuGuide(Screen screen) {
 		String back = hint(ControllerAction.MENU_BACK, "Back");
+		if (screen instanceof ControllerChatScreen) {
+			return new String[]{"LS / D-Pad Choose Key   " + hint(ControllerAction.MENU_SELECT, "Type") + "   " + back,
+					"X Backspace   Y Space   L3 Shift   Start Send"};
+		}
 		String clicks = hint(ControllerAction.MENU_SELECT, "Left Click") + "   "
 				+ hint(ControllerAction.MENU_RIGHT_CLICK, "Right Click");
 		if (screen instanceof InventoryMenuScreen) {
 			return new String[]{"LS Cursor   D-Pad Slots   " + back,
 					clicks + "   " + hint(ControllerAction.QUICK_MOVE, "Quick Move"),
-					ControllerAction.MENU_SCROLL_UP.label() + "/" + ControllerAction.MENU_SCROLL_DOWN.label() + " Scroll"};
+					"RS Scroll"};
 		}
-		return new String[]{"LS / D-Pad Cursor   " + back,
-				clicks + "   " + ControllerAction.MENU_SCROLL_UP.label() + "/" + ControllerAction.MENU_SCROLL_DOWN.label() + " Scroll"};
+		return new String[]{"LS Cursor   D-Pad Buttons   " + back, clicks + "   RS Scroll"};
 	}
 
 	private static String gameplayGuide() {
@@ -43,7 +47,7 @@ public final class ControllerGuideHud extends TextHud {
 				hint(ControllerAction.JUMP, "Jump") + "   " + hint(ControllerAction.SNEAK, "Sneak") + "   " + hint(ControllerAction.SPRINT, "Sprint"),
 				hint(ControllerAction.INVENTORY, "Inventory") + "   " + hint(ControllerAction.DROP, "Drop") + "   "
 						+ ControllerAction.HOTBAR_PREV.label() + "/" + ControllerAction.HOTBAR_NEXT.label() + " Hotbar",
-				hint(ControllerAction.CHAT, "Chat") + "   " + hint(ControllerAction.PERSPECTIVE, "View") + "   " + hint(ControllerAction.PLAYER_LIST, "Players"),
+				hint(ControllerAction.CHAT, "Chat") + "   " + hint(ControllerAction.PERSPECTIVE, "View") + "   " + hint(ControllerAction.RADIAL_MENU, "Radial Menu"),
 				hint(ControllerAction.PICK_BLOCK, "Pick Block") + "   " + hint(ControllerAction.PAUSE, "Pause"));
 	}
 

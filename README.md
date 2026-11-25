@@ -17,41 +17,49 @@ The Windows test client used Minecraft 1.8.9 on Ornithe Gen 2 with Fabric Loader
 
 ## Port status
 
-The current port initializes SDL 3 gamepad input, selects a connected SDL gamepad, reads standard stick and button state, applies analog movement and frame-smoothed camera input, exposes gyro and accelerometer samples, and provides rumble calls. OneConfig's Controlify settings include a switch to hide the menu guide and the movable in-game guide.
+This backport uses Controlify's default binding data, SDL gamepad input and controller database, input curves, hold-to-repeat timing, gyro calibration, rumble effects, radial-menu texture, and English keyboard layout. Pylon supplies the SDL bindings, Feather mixins adapt the Minecraft calls, and OneConfig provides settings and controller guides. [Upstream Controlify at `ec4f067d`](https://github.com/isXander/Controlify/tree/ec4f067db8a037fcc17f0d36259f2086affc4f7c)
 
 ## Menu and inventory controls
 
 | Xbox-style input | Action |
 | --- | --- |
-| Left stick / D-pad | Move the cursor. The D-pad snaps between slots in inventory screens |
+| Left stick / D-pad | Move the cursor / snap between buttons or inventory slots |
 | A | Left-click, or hold while moving to drag |
 | X | Right-click |
-| LB / RB | Scroll up / down |
+| Right stick up / down | Scroll up / down |
 | B | Go back |
 | Y | Quick-move the stack under the cursor in an inventory |
 
+The menu cursor uses Controlify's cubic response for precise movement near the center of the stick. Releasing the stick over an inventory slot centers the cursor on that slot. D-pad navigation repeats when held.
+
 ## Gameplay controls
 
-Open **OneConfig → Controlify → Controller → Controller Camera Speed (%)** to set right-stick turn speed from 25% to 300%. The default is 100%.
+Open **OneConfig → Controlify → Controller** to adjust horizontal and vertical turn speed, look inversion, input curve, and sensitivity while drawing a bow. The upstream defaults are 100% horizontal speed, 90% vertical speed, and the Standard quadratic curve. Full horizontal deflection at 100% turns the camera at 200° per second.
 
-Adjust **Left Stick Deadzone (%)** and **Right Stick Deadzone (%)** independently. Both default to 18%. Use **Gameplay Bindings** and **Menu Bindings** to remap actions. The tables show the default Xbox-style layout.
+The stick deadzones default to 12%, and triggers activate at 50%. Existing settings and remaps carry over. **Restore Upstream Defaults** applies the bindings and stick settings shown here to an existing installation.
 
-Turn on **Gyro Aim** in the same section to aim by moving an SDL-compatible controller with a gyroscope. It works alongside the right stick during gameplay. **Gyro Sensitivity (%)** adjusts the motion separately and defaults to 100%.
+Use **OneConfig → Controlify → Controller → Active Controller** to choose a connected gamepad. Automatic mode uses the first available gamepad. A manual selection waits for that controller to return after a disconnect. If SDL gives two controllers the same identity, the selection applies to the current session and must be selected again after restarting.
 
-**Vibration** plays a short pulse when your player takes damage. **Test Vibration** plays a preview from OneConfig.
+Bindings, stick and gyro options, vibration, and guide preferences are saved per controller. The first controller inherits your previous settings. New controllers start with upstream defaults. Profile matching uses the device serial number when available and SDL's path or name otherwise.
+
+Buttons held when closing a menu or regaining window focus only trigger gameplay actions after you release and press them again.
+
+Turn on **Gyro Aim** to use an SDL-compatible gyroscope. **Gyro Activation Mode** controls the activation binding. With the default **ON** mode and an unbound activation button, gyro aiming activates while drawing a bow. Set the mode to **OFF** to leave gyro aiming active during gameplay. The yaw axis, inversion, and gyro sensitivity are adjustable.
+
+**Vibration** plays upstream effects for damage, nearby explosions, drawing a bow, blocking, and consuming items. **Test Vibration** plays a preview from OneConfig.
 
 | Xbox-style input | Action |
 | --- | --- |
 | Left stick / right stick | Move / look |
 | Left trigger / right trigger | Use item / attack |
-| A / B / left stick click | Jump / sneak / sprint |
-| Y / X | Open inventory / drop one item |
+| A / right stick click / left stick click | Jump / toggle sneak / toggle sprint |
+| Y / D-pad down | Open inventory / drop item |
 | Left bumper / right bumper | Previous / next hotbar slot |
-| D-pad up / down | Open chat / cycle camera perspective |
-| D-pad right (hold) | Show the multiplayer player list |
-| Right stick click | Pick block |
+| D-pad up / View | Open chat / cycle camera perspective |
+| D-pad right (hold) | Open the radial menu. Select with the right stick and release to activate |
+| D-pad left | Pick block |
 | Start | Pause / resume |
 
-This is not yet the full Controlify feature set. Per-controller profiles, an on-screen keyboard, radial menus, richer haptics, resource-pack data, and mod compatibility integrations still need legacy implementations. The original code targets Minecraft 1.19.4 and newer; its modern game APIs do not exist in 1.8.9.
+The radial menu has gameplay and debug pages. Use LB and RB to change pages and B to cancel. Available actions include toggling the HUD or player list, dropping a stack, screenshots, and opening chat. Controller-opened chat uses upstream's English QWERTY layout with X for Backspace, Y for Space, L3 for Shift, and Start to send.
 
-The development client launched with Ornithe, Pylon, and this mod. SDL initialized and detected an Xbox One controller during the latest run. Controller navigation and movement feel still need hands-on testing.
+Radial customization, keyboards for text fields outside chat, flick stick, additional haptics, resource-pack overrides, and mod compatibility integrations are still pending. Minecraft 1.8.9 also lacks newer gameplay actions such as swapping items to the offhand.

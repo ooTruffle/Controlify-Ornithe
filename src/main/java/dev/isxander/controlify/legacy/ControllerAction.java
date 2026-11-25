@@ -17,6 +17,8 @@ enum ControllerAction {
 	PLAYER_LIST(() -> LegacyConfig.playerList),
 	PICK_BLOCK(() -> LegacyConfig.pickBlock),
 	PAUSE(() -> LegacyConfig.pause),
+	RADIAL_MENU(() -> LegacyConfig.radialMenu),
+	GYRO(() -> LegacyConfig.gyroButton),
 	MENU_SELECT(() -> LegacyConfig.menuSelect),
 	MENU_RIGHT_CLICK(() -> LegacyConfig.menuRightClick),
 	MENU_BACK(() -> LegacyConfig.menuBack),

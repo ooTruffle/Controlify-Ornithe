@@ -43,9 +43,24 @@ final class InventoryNavigation {
 			}
 		}
 		if (next != null) {
-			cursor.positionCursor((left + next.x + 8) * minecraft.width / screen.width,
-					minecraft.height - 1 - (top + next.y + 8) * minecraft.height / screen.height);
+			positionCursor(screen, cursor, next, left, top);
 		}
+	}
+
+	static void snapToClosest(InventoryMenuScreen screen, ControllerMenu cursor) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (minecraft.width <= 0 || minecraft.height <= 0 || screen.width <= 0 || screen.height <= 0) return;
+		var access = (InventoryMenuScreenAccess) screen;
+		InventorySlot slot = access.controlify$getSlot(mouseX(screen, minecraft), mouseY(screen, minecraft));
+		if (slot != null && slot.isActive()) {
+			positionCursor(screen, cursor, slot, access.controlify$getLeft(), access.controlify$getTop());
+		}
+	}
+
+	private static void positionCursor(InventoryMenuScreen screen, ControllerMenu cursor, InventorySlot slot, int left, int top) {
+		Minecraft minecraft = Minecraft.getInstance();
+		cursor.positionCursor((left + slot.x + 8) * minecraft.width / screen.width,
+				minecraft.height - 1 - (top + slot.y + 8) * minecraft.height / screen.height);
 	}
 
 	static boolean quickMove(InventoryMenuScreen screen) {

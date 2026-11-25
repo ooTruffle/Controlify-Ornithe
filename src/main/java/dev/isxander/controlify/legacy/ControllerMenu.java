@@ -1,6 +1,7 @@
 package dev.isxander.controlify.legacy;
 
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.sdl.SDLEvents;
@@ -12,10 +13,12 @@ import pl.tomgirl.pylon.window.DisplaySdl;
 import pl.tomgirl.pylon.window.MainThread;
 
 import java.nio.FloatBuffer;
+import java.util.List;
 
 /** Routes controller cursor actions through the mouse events consumed by vanilla screens. */
 final class ControllerMenu {
-	private static final double WINDOW_HEIGHTS_PER_SECOND = 0.9;
+	// Upstream VirtualMouseHandler uses 20 pixels per tick at a window size of 800 pixels.
+	private static final double PIXELS_PER_SECOND_PER_WINDOW_PIXEL = 20.0 * 20.0 / 800.0;
 
 	private long lastFrameNanos;
 	private double cursorX;
@@ -27,7 +30,11 @@ final class ControllerMenu {
 		long now = System.nanoTime();
 		int x = Mouse.getX();
 		int y = Mouse.getY();
-		if (lastFrameNanos == 0L || Math.abs(x - Math.round(cursorX)) > 1 || Math.abs(y - Math.round(cursorY)) > 1) {
+		boolean cursorMoved = Math.abs(x - Math.round(cursorX)) > 1 || Math.abs(y - Math.round(cursorY)) > 1;
+		if (lastFrameNanos != 0L && cursorMoved && horizontal == 0.0F && vertical == 0.0F) {
+			ControllerManager.keyboardMouseUsed();
+		}
+		if (lastFrameNanos == 0L || cursorMoved) {
 			cursorX = x;
 			cursorY = y;
 		}
@@ -38,7 +45,10 @@ final class ControllerMenu {
 		int width = Display.getWidth();
 		int height = Display.getHeight();
 		if (width <= 0 || height <= 0) return;
-		double speed = height * WINDOW_HEIGHTS_PER_SECOND / Math.max(1.0, Math.hypot(horizontal, vertical));
+		// Ease the length, preserving direction when both axes are in use.
+		double length = Math.hypot(horizontal, vertical);
+		double easedLength = Math.pow(Math.min(length, 1.0), 3.0);
+		double speed = Math.max(width, height) * PIXELS_PER_SECOND_PER_WINDOW_PIXEL * easedLength / length;
 		cursorX = Math.clamp(cursorX + horizontal * speed * elapsed, 0.0, width - 1.0);
 		// LWJGL mouse coordinates increase upward, while the controller axis increases downward.
 		cursorY = Math.clamp(cursorY - vertical * speed * elapsed, 0.0, height - 1.0);
@@ -56,6 +66,33 @@ final class ControllerMenu {
 		cursorX = nextX;
 		cursorY = nextY;
 		warpCursor(nextX, nextY, Mouse.getX(), Mouse.getY());
+	}
+
+	void snapToButton(Screen screen, List<ButtonWidget> buttons, int dx, int dy) {
+		int width = Display.getWidth();
+		int height = Display.getHeight();
+		if (width <= 0 || height <= 0 || screen.width <= 0 || screen.height <= 0) return;
+		int mouseX = Mouse.getX() * screen.width / width;
+		int mouseY = screen.height - 1 - Mouse.getY() * screen.height / height;
+		ButtonWidget next = null;
+		double bestScore = Double.MAX_VALUE;
+		for (ButtonWidget button : buttons) {
+			if (!button.active || !button.visible) continue;
+			int offsetX = button.x + button.getWidth() / 2 - mouseX;
+			int offsetY = button.y + 9 - mouseY;
+			int forward = offsetX * dx + offsetY * dy;
+			int lateral = offsetX * dy - offsetY * dx;
+			if (forward <= 0 || Math.abs(lateral) >= forward * 2.0) continue;
+			double score = (double) forward * forward + 4.0 * lateral * lateral;
+			if (score < bestScore) {
+				bestScore = score;
+				next = button;
+			}
+		}
+		if (next != null) {
+			positionCursor((next.x + next.getWidth() / 2) * width / screen.width,
+					height - 1 - (next.y + 9) * height / screen.height);
+		}
 	}
 
 	private void warpCursor(int nextX, int nextY, int x, int y) {
